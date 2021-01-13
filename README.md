@@ -3,13 +3,13 @@
 
 导入Landsat8 OLI TOA影像数据，每三年为一组，并筛选云量低于30%的影像
 
-根据[经验公式]（http://refhub.elsevier.com/S0034-4257(20)30416-8/rf0365） 计算OLI 2、3、4、5、6、7波段，使其能与ETM+对应波段融合
+根据[经验公式](http://refhub.elsevier.com/S0034-4257(20)30416-8/rf0365) 计算OLI 2、3、4、5、6、7波段，使其能与ETM+对应波段融合
 
 导入landsa7 ETM+ TOA影像数据，每三年为一组，并筛选云量低于30%的影像
 
 TM影像同理，波段可直接融合，按照数据表格每三年一组
 
-
+![三年影像数据表](https://github.com/Chengyuan-Q/GEE-code/blob/main/%E5%9B%BE%E7%89%87.png?raw=true)
 
 将OLI与ETM+对应波段使用30位百分位数还原器融合
 
