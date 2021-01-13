@@ -1,0 +1,119 @@
+//确定研究区范围
+var roi =ee.Geometry.Polygon(
+        [[[118.30611002555963,37.48989308681977],
+          [119.43220865837213,37.48989308681977],
+          [119.43220865837213,38.2487463862179],
+          [118.30611002555963,38.2487463862179]]]);
+
+//Landsat8 波段重命名
+var rename=function(image){
+  return image.rename(['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11'])
+}          
+
+//载入Landsat8 TOA影像
+var l8 = ee.ImageCollection("LANDSAT/LC08/C01/T1_RT_TOA")
+               .filterDate("2013-1-1", "2015-12-31")                
+               .filterBounds(roi)                
+               .filter(ee.Filter.lt('CLOUD_COVER',30))
+               .map(rename)
+    
+print (l8);
+
+//将Landsat8波段根据经验公式转化为能与ETM+影像融合的数据
+var index=function(image){
+var B1 = image.expression(
+  '0.0219+0.8155*B1',
+{
+        B1: image.select('B1')    
+}).rename('B1');
+
+var B2 = image.expression(
+  '0.0128+0.8911*B2',
+{
+        B2: image.select('B2')    
+}).rename('B2');
+
+var B3 = image.expression(
+  '0.0128+0.9129*B3',
+{
+        B3: image.select('B3')    
+}).rename('B3');
+
+var B4 = image.expression(
+  '0.0438+0.7660*B4',
+{
+        B4: image.select('B4')    
+}).rename('B4');
+
+var B5 = image.expression(
+  '0.0246+0.8286*B5',
+{
+        B5: image.select('B5')    
+}).rename('B5');
+
+var B6 = image.expression(
+  '0.0075+0.8329*B6',
+{
+        B6: image.select('B6')    
+}).rename('B6');
+return B1.addBands(B2).addBands(B3).addBands(B4).addBands(B5).addBands(B6)
+}
+
+var collection_merge=l8.map(index);
+print (collection_merge);
+
+//载入landsat7影像  TM影像同理
+var l7 = ee.ImageCollection("LANDSAT/LE07/C01/T1_RT_TOA") 
+               .filterDate("2013-1-1", "2015-12-31")                
+               .filterBounds(roi)                
+               .filter(ee.Filter.lt('CLOUD_COVER',30))
+               .select(['B1','B2','B3','B4','B5','B7'],['B1','B2','B3','B4','B5','B6'])
+              .reduce(ee.Reducer.percentile([30]));
+
+//融合影像
+//var image=collection_merge.merge(l7)
+          //.reduce(ee.Reducer.percentile([30])); //三十位百分位数还原器
+
+print (l7);
+var image=l7.clip(roi);
+Map.addLayer(image, {bands:["B3_p30", "B2_p30", "B1_p30"]});
+
+var bands=['B1_p30', 'B2_p30', 'B3_p30', 'B4_p30', 'B5_p30', 'B6_p30']; 
+
+        
+var landMeans = image.reduceRegion({reducer: ee.Reducer.mean(),   geometry:land,   scale:30, }).values(); 
+  print(landMeans);  
+  var waterMeans = image.reduceRegion({   reducer: ee.Reducer.mean(),  geometry:water,   scale:30, }).values();  
+  //对不同地物的光谱曲线进行查看 以防出错 
+  var chart = ui.Chart.image.regions(image,ee.FeatureCollection([   
+    ee.Feature(land,{label:'land'}),   
+    ee.Feature(water,{label:'water'})]),   
+    ee.Reducer.mean(),30,'label',[0.48,0.56,0.65,0.86,1.61,2.2]   ); 
+    print(chart); 
+    //创建端元 
+    var endmembers = ee.Array.cat([landMeans,waterMeans],1); 
+    print(endmembers);  
+    var arrayImage = image.toArray().toArray(1);  
+    var unmixed = ee.Image(endmembers).matrixSolve(arrayImage);  
+    var unmixedImage = unmixed.arrayProject([0])                
+    .arrayFlatten([['land','water']]); 
+    //默认红：land  蓝：water 
+    Map.addLayer(unmixedImage,{},'fractions');
+    print(unmixedImage)
+    
+    //var imputkmeans={image:unmixedImage, numClusters:2, numIterations:10,neighborhoodSize:256} 
+    //var Kmeans=ee.Algorithms.Image.Segmentation.KMeans(imputkmeans) 
+    //Map.addLayer(Kmeans.select(0).randomVisualizer(),{},'Kmeans')
+    //print(Kmeans);
+    var img1=unmixedImage.clip(roi);
+    
+//导出混合像元分解结果
+    Export.image.toDrive({   
+      image: img1,   
+      description: "Kmeans",   
+      fileNamePrefix: "Kmeans",   
+      scale: 30,   
+      region: roi, });
+
+
+
